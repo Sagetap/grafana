@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/grafana/grafana/pkg/services/encryption"
+
 	"github.com/grafana/grafana/pkg/registry"
 
 	"github.com/grafana/grafana/pkg/util"
@@ -27,14 +29,15 @@ var logger = log.New("secrets") // TODO: should it be at the package level?
 func init() {
 	registry.Register(&registry.Descriptor{
 		Name:         "SecretsService",
-		Instance:     &Secrets{},
+		Instance:     &SecretsService{},
 		InitPriority: registry.High,
 	})
 }
 
-type Secrets struct {
-	Store *sqlstore.SQLStore `inject:""`
-	Bus   bus.Bus            `inject:""`
+type SecretsService struct {
+	Store      *sqlstore.SQLStore           `inject:""`
+	Bus        bus.Bus                      `inject:""`
+	Encryption encryption.EncryptionService `inject:""`
 
 	//defaultEncryptionKey string // TODO: Where should it be initialized? It looks like key id/name
 	defaultProvider string
@@ -52,9 +55,10 @@ type Provider interface {
 	Decrypt(blob []byte) ([]byte, error)
 }
 
-func (s *Secrets) Init() error {
+func (s *SecretsService) Init() error {
 	s.providers = map[string]Provider{
 		"": &settingsSecretKey{
+			e: encryption.OSSEncryptionService{},
 			key: func() []byte {
 				return []byte(setting.SecretKey)
 			},
@@ -62,8 +66,8 @@ func (s *Secrets) Init() error {
 	}
 	s.defaultProvider = "" // should be read from settings
 
-	ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
-	defer cancel()
+	//ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
+	//defer cancel()
 
 	//baseKey := "root"
 	//_, err := s.Store.GetDataKey(ctx, baseKey)
@@ -84,7 +88,7 @@ func (s *Secrets) Init() error {
 	return nil
 }
 
-func (s *Secrets) newRandomDataKey(ctx context.Context, name string) error {
+func (s *SecretsService) newRandomDataKey(ctx context.Context, name string) error {
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
 	if err != nil {
@@ -111,15 +115,15 @@ func (s *Secrets) newRandomDataKey(ctx context.Context, name string) error {
 
 var b64 = base64.RawStdEncoding
 
-func (s *Secrets) Encrypt(payload []byte) ([]byte, error) {
-	//key := "root" // TODO: some logic to figure out what DEK identifier to use
-	createOrGetDEK()
-	dataKey, err := s.dataKey(key)
+func (s *SecretsService) Encrypt(payload []byte) ([]byte, error) {
+	key := "root"                  // TODO: some logic to figure out what DEK identifier to use
+	dataKey, err := s.dataKey(key) // remove key from args
+	// if no active key, create a new and cache createDEK()
 	if err != nil {
 		return nil, err
 	}
 
-	encrypted, err := encrypt(payload, dataKey)
+	encrypted, err := s.Encryption.Encrypt(payload, dataKey)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +140,7 @@ func (s *Secrets) Encrypt(payload []byte) ([]byte, error) {
 	return blob, nil
 }
 
-func (s *Secrets) Decrypt(payload []byte) ([]byte, error) {
+func (s *SecretsService) Decrypt(payload []byte) ([]byte, error) {
 	if len(payload) == 0 {
 		return []byte{}, nil // TODO: Not sure if it should return error like decrypt does (also see tests)
 	}
@@ -165,11 +169,11 @@ func (s *Secrets) Decrypt(payload []byte) ([]byte, error) {
 		}
 	}
 
-	return decrypt(payload, dataKey)
+	return s.Encryption.Decrypt(payload, dataKey)
 }
 
 // dataKey decrypts and caches DEK
-func (s *Secrets) dataKey(key string) ([]byte, error) {
+func (s *SecretsService) dataKey(key string) ([]byte, error) {
 	if key == "" {
 		return []byte(setting.SecretKey), nil // TODO: not sure what case this condition handles
 	}
