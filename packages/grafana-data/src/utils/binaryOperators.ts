@@ -4,6 +4,7 @@ export enum BinaryOperationID {
   Add = '+',
   Subtract = '-',
   Divide = '/',
+  DivideAndRound = '\u230A/\u2309',
   Multiply = '*',
 }
 
@@ -34,6 +35,11 @@ export const binaryOperators = new Registry<BinaryOperatorInfo>(() => {
       id: BinaryOperationID.Divide,
       name: 'Divide',
       operation: (a: number, b: number) => a / b,
+    },
+    {
+      id: BinaryOperationID.DivideAndRound,
+      name: 'Divide and round',
+      operation: (a: number, b: number) => Math.round(a / b),
     },
   ];
 });
