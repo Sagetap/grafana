@@ -18,6 +18,7 @@ export enum ReducerID {
   last = 'last',
   first = 'first',
   count = 'count',
+  nonNullCount = 'nonNullCount',
   range = 'range',
   diff = 'diff',
   diffperc = 'diffperc',
@@ -177,6 +178,13 @@ export const fieldReducers = new Registry<FieldReducerInfo>(() => [
     standard: true,
   },
   {
+    id: ReducerID.nonNullCount,
+    name: 'Count non-null',
+    description: 'Number of non-null values in response',
+    emptyInputResult: 0,
+    standard: true,
+  },
+  {
     id: ReducerID.range,
     name: 'Range',
     description: 'Difference between minimum and maximum values',
@@ -306,6 +314,8 @@ export function doStandardCalcs(field: Field, ignoreNulls: boolean, nullAsZero: 
 
     if (currentValue != null) {
       // null || undefined
+      calcs.nonNullCount++;
+
       const isFirst = calcs.firstNotNull === null;
       if (isFirst) {
         calcs.firstNotNull = currentValue;
@@ -315,7 +325,6 @@ export function doStandardCalcs(field: Field, ignoreNulls: boolean, nullAsZero: 
         numbers.push(currentValue);
         calcs.sum += currentValue;
         calcs.allIsNull = false;
-        calcs.nonNullCount++;
 
         if (!isFirst) {
           const step = currentValue - calcs.lastNotNull!;
