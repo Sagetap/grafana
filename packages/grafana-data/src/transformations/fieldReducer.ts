@@ -10,6 +10,11 @@ export enum ReducerID {
   min = 'min',
   logmin = 'logmin',
   mean = 'mean',
+  p25 = 'p25',
+  p50 = 'p50',
+  p75 = 'p75',
+  p95 = 'p95',
+  p99 = 'p99',
   last = 'last',
   first = 'first',
   count = 'count',
@@ -151,6 +156,11 @@ export const fieldReducers = new Registry<FieldReducerInfo>(() => [
   { id: ReducerID.min, name: 'Min', description: 'Minimum Value', standard: true },
   { id: ReducerID.max, name: 'Max', description: 'Maximum Value', standard: true },
   { id: ReducerID.mean, name: 'Mean', description: 'Average Value', standard: true, aliasIds: ['avg'] },
+  { id: ReducerID.p25, name: 'p25', description: '25th %ile', standard: true },
+  { id: ReducerID.p50, name: 'p50 (median)', description: '25th %ile', standard: true },
+  { id: ReducerID.p75, name: 'p75', description: '75th %ile', standard: true },
+  { id: ReducerID.p95, name: 'p95', description: '95th %ile', standard: true },
+  { id: ReducerID.p99, name: 'p99', description: '99th %ile', standard: true },
   {
     id: ReducerID.sum,
     name: 'Total',
@@ -246,6 +256,11 @@ export function doStandardCalcs(field: Field, ignoreNulls: boolean, nullAsZero: 
     min: Number.MAX_VALUE,
     logmin: Number.MAX_VALUE,
     mean: null,
+    p25: null,
+    p50: null,
+    p75: null,
+    p95: null,
+    p99: null,
     last: null,
     first: null,
     lastNotNull: null,
@@ -268,6 +283,8 @@ export function doStandardCalcs(field: Field, ignoreNulls: boolean, nullAsZero: 
   calcs.count = data.length;
 
   const isNumberField = field.type === FieldType.number || FieldType.time;
+
+  const numbers = [];
 
   for (let i = 0; i < data.length; i++) {
     let currentValue = data.get(i);
@@ -295,6 +312,7 @@ export function doStandardCalcs(field: Field, ignoreNulls: boolean, nullAsZero: 
       }
 
       if (isNumberField) {
+        numbers.push(currentValue);
         calcs.sum += currentValue;
         calcs.allIsNull = false;
         calcs.nonNullCount++;
@@ -359,6 +377,15 @@ export function doStandardCalcs(field: Field, ignoreNulls: boolean, nullAsZero: 
     calcs.mean = calcs.sum! / calcs.nonNullCount;
   }
 
+  if (numbers.length > 0) {
+    numbers.sort((a, b) => a - b);
+    calcs.p25 = calculatePercentile(numbers, 25);
+    calcs.p50 = calculatePercentile(numbers, 50);
+    calcs.p75 = calculatePercentile(numbers, 75);
+    calcs.p95 = calculatePercentile(numbers, 95);
+    calcs.p99 = calculatePercentile(numbers, 99);
+  }
+
   if (calcs.allIsNull) {
     calcs.allIsZero = false;
   }
@@ -375,6 +402,22 @@ export function doStandardCalcs(field: Field, ignoreNulls: boolean, nullAsZero: 
     calcs.diffperc = calcs.diff / calcs.firstNotNull;
   }
   return calcs;
+}
+
+function calculatePercentile(numbers: number[], percentile: number) {
+  const idx = (numbers.length * percentile) / 100;
+
+  if (idx >= numbers.length - 1) {
+    return numbers[numbers.length - 1];
+  }
+  if (idx === 0) {
+    return numbers[0];
+  }
+  const idx_round = Math.round(idx);
+  if (idx_round === idx) {
+    return (numbers[idx - 1] + numbers[idx]) / 2;
+  }
+  return numbers[idx_round];
 }
 
 function calculateFirst(field: Field, ignoreNulls: boolean, nullAsZero: boolean): FieldCalcs {
