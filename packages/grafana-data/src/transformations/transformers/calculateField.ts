@@ -101,7 +101,7 @@ export const calculateFieldTransformer: DataTransformerInfo<CalculateFieldTransf
 
           const field = {
             name: getNameFromOptions(options),
-            type: FieldType.number,
+            type: getTypeFromOptions(options),
             config: {},
             values,
           };
@@ -235,4 +235,14 @@ export function getNameFromOptions(options: CalculateFieldTransformerOptions) {
   }
 
   return 'math';
+}
+
+export function getTypeFromOptions(options: CalculateFieldTransformerOptions): FieldType {
+  if (
+    options.mode === CalculateFieldMode.BinaryOperation &&
+    options.binary?.operator === BinaryOperationID.TimeBucket
+  ) {
+    return FieldType.time;
+  }
+  return FieldType.number;
 }
